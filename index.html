@@ -88,9 +88,48 @@ let lastWakeLockError = "";
 let lastWakeLockAcquiredAt = 0;
 let lastWakeLockReleasedAt = 0;
 
+// Navigation hardening (best-effort; browsers limit how "sticky" a page can be).
+let navGuardArmed = false;
+
 // Simple in-page notification log (helps confirm when things stopped/started).
 const EVENT_LOG_MAX = 40;
 let eventLog = [];
+
+function armNavigationGuard() {
+  if (navGuardArmed) return;
+  navGuardArmed = true;
+
+  // Adds a history entry so the Back button triggers a popstate we can intercept.
+  try {
+    history.pushState({ navGuard: true }, "", window.location.href);
+  } catch {
+    // ignore
+  }
+}
+
+function disarmNavigationGuard() {
+  navGuardArmed = false;
+}
+
+// Trigger a native "Leave site?" dialog on refresh/close while the session is active.
+window.addEventListener("beforeunload", (e) => {
+  if (!sessionActive) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+// Best-effort back-button trap while the session is active.
+window.addEventListener("popstate", () => {
+  if (!sessionActive) return;
+  const ok = window.confirm("Session is running. Leave this page and end tracking?");
+  if (!ok) {
+    try {
+      history.pushState({ navGuard: true }, "", window.location.href);
+    } catch {
+      // ignore
+    }
+  }
+});
 
 function logEvent(message) {
   const ts = formatTime(Date.now());
@@ -540,6 +579,7 @@ document.getElementById("wakeButton").onclick = async () => {
   // Start session
   clearWarning();
   sessionActive = true;
+  armNavigationGuard();
   keepAwakeEnabled = true;
   lastTimerTickMs = Date.now();
   logEvent("Session started");
@@ -558,6 +598,7 @@ document.getElementById("endButton").onclick = async () => {
   if (!sessionActive) return;
   setStatus("Ending session…");
   sessionActive = false;
+  disarmNavigationGuard();
   keepAwakeEnabled = false;
   logEvent("Session ended");
 
