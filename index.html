@@ -101,7 +101,7 @@ function logEvent(message) {
 }
 
 // Session + logging
-const GPS_INTERVAL_MS = 1 * 60 * 1000;
+const GPS_INTERVAL_MS = 10 * 1000;
 const GPS_STALE_ALERT_MS = 10 * 60 * 1000;
 const GPS_MAX_ACCURACY_METERS = 100; // higher = worse accuracy
 
@@ -109,6 +109,7 @@ let gpsLog = [];
 let gpsFailures = 0;
 let focusInterruptions = 0;
 let lastGpsFixAt = 0;
+let gpsFixInFlight = false;
 let gpsIntervalId = 0;
 let gpsStaleCheckId = 0;
 let timerIntervalId = 0;
@@ -408,6 +409,8 @@ async function gpsHealthCheck() {
 
 async function collectGpsFix() {
   if (!sessionActive) return;
+  if (gpsFixInFlight) return;
+  gpsFixInFlight = true;
   try {
     const { fix } = await requestGpsFix({ purpose: "interval" });
 
@@ -428,6 +431,8 @@ async function collectGpsFix() {
     playAlert();
     showWarning("GPS fix failed. Ensure Location is ON and permission is granted.");
     updateDiagnostics();
+  } finally {
+    gpsFixInFlight = false;
   }
 }
 
@@ -435,7 +440,7 @@ function startGpsLogging() {
   if (gpsIntervalId) window.clearInterval(gpsIntervalId);
   if (gpsStaleCheckId) window.clearInterval(gpsStaleCheckId);
 
-  // Collect one immediately, then every 1 minute.
+  // Collect one immediately, then every 10 seconds.
   collectGpsFix();
   gpsIntervalId = window.setInterval(collectGpsFix, GPS_INTERVAL_MS);
 
