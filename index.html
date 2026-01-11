@@ -75,6 +75,7 @@
   <div id="diagWakeSupport"></div>
   <div id="diagWakeState"></div>
   <div id="diagMaps"></div>
+  <div id="diagStorage"></div>
 </div>
 
 <!-- iOS silent video trick -->
@@ -264,6 +265,17 @@ function _loadStoredArray(key) {
   } catch {
     return [];
   }
+}
+
+function _appendStoredItem(key, item) {
+  const arr = _loadStoredArray(key);
+  arr.push(item);
+  try {
+    window.localStorage.setItem(key, JSON.stringify(arr));
+  } catch {
+    // ignore
+  }
+  return arr.length;
 }
 
 function _hideResumeBanner() {
@@ -486,6 +498,22 @@ function updateDiagnostics() {
   setText(
     "diagMaps",
     lastNavTapAt ? `Google Maps: Start Navigation started at ${formatTime(lastNavTapAt)}` : "Google Maps: Not started"
+  );
+
+  // Persistent storage visibility
+  let storedGpsCount = 0;
+  let storedEventCount = 0;
+  try {
+    storedGpsCount = _loadStoredArray("gpsLog").length;
+    storedEventCount = _loadStoredArray("eventLog").length;
+  } catch {
+    // ignore
+  }
+  const gpsMode = (gpsStore && gpsStore.saveFix) ? "module" : "fallback";
+  const eventMode = (eventStore && eventStore.persistLog) ? "module" : "fallback";
+  setText(
+    "diagStorage",
+    `Stored run data (localStorage): gpsLog=${storedGpsCount} fixes (${gpsMode}), eventLog=${storedEventCount} events (${eventMode})`
   );
 
   // Session info
@@ -731,8 +759,13 @@ async function collectGpsFix() {
     }
 
     // Persist each fix immediately (survives reload/crash/tab kill).
+    // Prefer gpsLogger.js, but fall back to raw localStorage so persistence still works even if module import fails.
     try {
-      if (gpsStore && gpsStore.saveFix) gpsStore.saveFix(fix);
+      if (gpsStore && gpsStore.saveFix) {
+        gpsStore.saveFix(fix);
+      } else {
+        _appendStoredItem("gpsLog", fix);
+      }
     } catch {
       // ignore storage errors; keep in-memory logging running
     }
@@ -845,6 +878,17 @@ function exportEventLogTxt() {
   });
 }
 
+function exportEventLogAndClear() {
+  // Export from storage (preferred) and only then clear the stored log.
+  exportEventLogTxt();
+  try {
+    if (eventStore && eventStore.clearLog) eventStore.clearLog();
+    else window.localStorage.removeItem("eventLog");
+  } catch {
+    // ignore
+  }
+}
+
 function showRunSummary() {
   const sum = document.getElementById("summary");
   if (!sum) return;
@@ -942,7 +986,7 @@ document.getElementById("exportCsvButton").onclick = async () => {
   // Fallback: export in-memory log if persistence isn't available.
   exportGpsCsv();
 };
-document.getElementById("exportLogButton").onclick = exportEventLogTxt;
+document.getElementById("exportLogButton").onclick = exportEventLogAndClear;
 
 // If the tab becomes hidden, Chromium will usually release the lock.
 // Re-acquire it when returning to the tab (only if the user enabled it).
