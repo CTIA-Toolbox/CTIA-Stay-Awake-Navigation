@@ -291,6 +291,7 @@
     <div id="navActions" class="actions two">
       <button id="navButton" class="btn btn-primary">Start Navigation</button>
       <button id="fullscreenButton" class="btn btn-neutral" type="button">Enter Fullscreen</button>
+      <button id="installButton" class="btn btn-success" type="button" style="display:none;">Install App</button>
     </div>
   </div>
 
@@ -340,6 +341,7 @@
     <h2>Diagnostics</h2>
     <div id="diagUrl" class="kv"></div>
     <div id="diagDisplayMode" class="kv"></div>
+    <div id="diagInstall" class="kv"></div>
     <div id="diagWakeSupport" class="kv"></div>
     <div id="diagWakeState" class="kv"></div>
     <div id="diagMaps" class="kv"></div>
@@ -372,6 +374,10 @@ let lastShownAt = Date.now();
 let lastWakeLockError = "";
 let lastWakeLockAcquiredAt = 0;
 let lastWakeLockReleasedAt = 0;
+
+// PWA install prompt (Chrome/Android). The mini-infobar may only appear once;
+// this lets us show our own Install button when available.
+let deferredInstallPrompt = null;
 
 // Fullscreen (best-effort). Note: browsers only allow this from a user gesture.
 function isFullscreenNow() {
@@ -905,6 +911,10 @@ function updateDiagnostics() {
     displayMode = "fullscreen";
   }
   setText("diagDisplayMode", `Display mode: ${displayMode}`);
+
+  const installState = (displayMode === "standalone" || displayMode === "fullscreen") ? "installed" : "not installed";
+  const installPrompt = deferredInstallPrompt ? "available" : "not available";
+  setText("diagInstall", `Install: ${installState} | prompt: ${installPrompt}`);
 
   setText(
     "diagWakeSupport",
@@ -1519,6 +1529,48 @@ window.addEventListener("pageshow", () => {
 // Initialize button state
 updateWakeButtonState();
 setControlsPlacement();
+
+// Android/Chrome install flow (best-effort)
+window.addEventListener("beforeinstallprompt", (e) => {
+  // Prevent Chrome from showing the mini-infobar so we can offer a consistent button.
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById("installButton");
+  if (btn) btn.style.display = "";
+  try { logEvent("Install prompt available"); } catch { /* ignore */ }
+  updateDiagnostics();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  const btn = document.getElementById("installButton");
+  if (btn) btn.style.display = "none";
+  try { logEvent("App installed"); } catch { /* ignore */ }
+  updateDiagnostics();
+});
+
+document.getElementById("installButton").onclick = async () => {
+  const btn = document.getElementById("installButton");
+  if (!deferredInstallPrompt) {
+    // Still installable via Chrome menu even if prompt isn't available.
+    showWarning("Install prompt not available. In Chrome, use ⋮ menu → Install app / Add to Home screen.");
+    audibleAlert("warn");
+    return;
+  }
+
+  try {
+    clearWarning();
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice;
+    try { logEvent(`Install prompt: ${choice?.outcome || "unknown"}`); } catch { /* ignore */ }
+  } catch (e) {
+    try { logEvent(`Install failed: ${e?.message || e}`); } catch { /* ignore */ }
+  } finally {
+    deferredInstallPrompt = null;
+    if (btn) btn.style.display = "none";
+    updateDiagnostics();
+  }
+};
 
 // PWA: service worker registration (GitHub Pages is HTTPS, so this should work)
 if ("serviceWorker" in navigator) {
