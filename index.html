@@ -2,8 +2,21 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Stay Awake Navigation</title>
+
+<!-- PWA / standalone hints (only fully apply when installed / Add-to-Home-Screen) -->
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+
+<!-- Icons (GitHub Pages-friendly relative paths) -->
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+
 <style>
   :root {
     --bg: #f6f7fb;
@@ -45,6 +58,10 @@
 
   * { box-sizing: border-box; }
 
+  html, body {
+    height: 100%;
+  }
+
   body {
     margin: 0;
     font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -52,12 +69,26 @@
                 radial-gradient(900px 500px at 100% 0%, rgba(22, 163, 74, 0.08), transparent 55%),
                 var(--bg);
     color: var(--text);
+    overscroll-behavior: none;
   }
 
   .app {
     max-width: 620px;
     margin: 0 auto;
-    padding: 22px 16px 32px;
+    padding: calc(22px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  }
+
+  /* When fullscreen/installed, use the whole screen width */
+  :fullscreen .app {
+    max-width: 100%;
+  }
+
+  @media (display-mode: standalone) {
+    .app { max-width: 100%; }
+  }
+
+  @media (display-mode: fullscreen) {
+    .app { max-width: 100%; }
   }
 
   .header {
@@ -243,8 +274,9 @@
     <p>Tap <strong>Start Navigation</strong> to open Google Maps, return here, then tap <strong>Enable Stay Awake</strong> to start the session.</p>
   </header>
 
-  <div class="actions">
+  <div class="actions two">
     <button id="navButton" class="btn btn-primary">Start Navigation</button>
+    <button id="fullscreenButton" class="btn btn-neutral" type="button">Enter Fullscreen</button>
   </div>
 
   <div id="warningBanner" class="banner banner-warn"></div>
@@ -317,6 +349,67 @@ let lastShownAt = Date.now();
 let lastWakeLockError = "";
 let lastWakeLockAcquiredAt = 0;
 let lastWakeLockReleasedAt = 0;
+
+// Fullscreen (best-effort). Note: browsers only allow this from a user gesture.
+function isFullscreenNow() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+async function requestFullscreenBestEffort() {
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) {
+      await el.requestFullscreen({ navigationUI: "hide" });
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    // Older Safari/Chrome variants
+    if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
+
+async function exitFullscreenBestEffort() {
+  try {
+    if (document.exitFullscreen) {
+      await document.exitFullscreen();
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    if (document.webkitExitFullscreen) {
+      document.webkitExitFullscreen();
+      return true;
+    }
+  } catch {
+    // ignore
+  }
+
+  return false;
+}
+
+function updateFullscreenButton() {
+  const btn = document.getElementById("fullscreenButton");
+  if (!btn) return;
+
+  const supported = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+  // If not supported (common on iOS Safari unless installed), hide the control.
+  btn.style.display = supported ? "" : "none";
+  btn.textContent = isFullscreenNow() ? "Exit Fullscreen" : "Enter Fullscreen";
+}
 
 // Navigation hardening (best-effort; browsers limit how "sticky" a page can be).
 let navGuardArmed = false;
@@ -474,6 +567,8 @@ let lastStaleAlertAt = 0;
 // Persistent GPS storage (survives reloads/crashes/tab kills via localStorage)
 let gpsStore = null;
 let hasPreviousRun = false;
+let storageOk = true;
+let storageError = "";
 
 function _loadStoredArray(key) {
   try {
@@ -495,6 +590,30 @@ function _appendStoredItem(key, item) {
     // ignore
   }
   return arr.length;
+}
+
+function storageSelfTest() {
+  const key = "__pwa_storage_test__";
+  const value = `ok-${Date.now()}`;
+  try {
+    window.localStorage.setItem(key, value);
+    const roundTrip = window.localStorage.getItem(key);
+    window.localStorage.removeItem(key);
+
+    if (roundTrip !== value) {
+      storageOk = false;
+      storageError = "localStorage read-back mismatch";
+      return false;
+    }
+
+    storageOk = true;
+    storageError = "";
+    return true;
+  } catch (e) {
+    storageOk = false;
+    storageError = (e && e.message) ? e.message : "localStorage blocked";
+    return false;
+  }
 }
 
 function _hideResumeBanner() {
@@ -744,7 +863,7 @@ function updateDiagnostics() {
   const eventMode = (eventStore && eventStore.persistLog) ? "module" : "fallback";
   setText(
     "diagStorage",
-    `Stored run data (localStorage): gpsLog=${storedGpsCount} fixes (${gpsMode}), eventLog=${storedEventCount} events (${eventMode})`
+    `Stored run data (localStorage): gpsLog=${storedGpsCount} fixes (${gpsMode}), eventLog=${storedEventCount} events (${eventMode}) | storage=${storageOk ? "OK" : "BLOCKED"}`
   );
 
   // Session info
@@ -1181,6 +1300,9 @@ document.getElementById("wakeButton").onclick = async () => {
   // Must be user gesture for audio + permissions.
   ensureAudio();
 
+  // Best-effort fullscreen (works in many Android browsers; iOS usually requires Add-to-Home-Screen).
+  await requestFullscreenBestEffort();
+
   // Pre-run GPS health check
   const gpsOk = await gpsHealthCheck();
   if (!gpsOk) return;
@@ -1208,6 +1330,19 @@ document.getElementById("endButton").onclick = async () => {
   disarmNavigationGuard();
   await endSession({ reason: "Session ended" });
 };
+
+document.getElementById("fullscreenButton").onclick = async () => {
+  if (isFullscreenNow()) {
+    await exitFullscreenBestEffort();
+  } else {
+    await requestFullscreenBestEffort();
+  }
+  updateFullscreenButton();
+};
+
+document.addEventListener("fullscreenchange", updateFullscreenButton);
+document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+updateFullscreenButton();
 
 document.getElementById("exportCsvButton").onclick = async () => {
   if (window.exportRun) {
@@ -1256,6 +1391,14 @@ document.addEventListener("visibilitychange", async () => {
 });
 
 // Initialize diagnostics ASAP
+storageSelfTest();
+if (!storageOk) {
+  showWarning(
+    "Persistent storage appears to be blocked in this browser mode. GPS fixes and the event log may NOT survive reloads/crashes. " +
+      "Try non-private mode or allow site data. Details: " +
+      storageError
+  );
+}
 updateDiagnostics();
 updateStatusPill();
 logEvent("Page loaded");
@@ -1282,6 +1425,23 @@ window.addEventListener("pageshow", () => {
 
 // Initialize button state
 updateWakeButtonState();
+
+// PWA: service worker registration (GitHub Pages is HTTPS, so this should work)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+      logEvent("Service worker registered");
+    } catch (e) {
+      // Not fatal (e.g., file://, unsupported browser, or SW blocked)
+      try {
+        logEvent(`Service worker registration failed: ${e?.message || e}`);
+      } catch {
+        // ignore
+      }
+    }
+  });
+}
 
 document.getElementById("navButton").onclick = () => {
   // Important: Wake Lock is tied to THIS page/tab. If we navigate away in the same tab,
