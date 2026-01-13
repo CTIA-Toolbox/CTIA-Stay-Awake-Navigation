@@ -274,9 +274,11 @@
     <p>Tap <strong>Start Navigation</strong> to open Google Maps, return here, then tap <strong>Enable Stay Awake</strong> to start the session.</p>
   </header>
 
-  <div class="actions two">
-    <button id="navButton" class="btn btn-primary">Start Navigation</button>
-    <button id="fullscreenButton" class="btn btn-neutral" type="button">Enter Fullscreen</button>
+  <div id="navActionsMount">
+    <div id="navActions" class="actions two">
+      <button id="navButton" class="btn btn-primary">Start Navigation</button>
+      <button id="fullscreenButton" class="btn btn-neutral" type="button">Enter Fullscreen</button>
+    </div>
   </div>
 
   <div id="warningBanner" class="banner banner-warn"></div>
@@ -291,9 +293,11 @@
     </div>
   </div>
 
-  <div class="actions two">
-    <button id="wakeButton" class="btn btn-primary">Enable Stay Awake (Start Session)</button>
-    <button id="endButton" class="btn btn-neutral" disabled>End Session</button>
+  <div id="sessionActionsMount">
+    <div id="sessionActions" class="actions two">
+      <button id="wakeButton" class="btn btn-primary">Enable Stay Awake (Start Session)</button>
+      <button id="endButton" class="btn btn-neutral" disabled>End Session</button>
+    </div>
   </div>
 
   <div id="status" class="status">Status: Idle</div>
@@ -328,6 +332,11 @@
     <div id="diagMaps" class="kv"></div>
     <div id="diagStorage" class="kv"></div>
   </section>
+
+  <!-- When a session is running, controls are moved down here with a spacer so
+       you must scroll to reach them again (reduces accidental taps). -->
+  <div id="controlsBottomSpacer" aria-hidden="true" style="height:0;"></div>
+  <div id="controlsBottomMount"></div>
 </main>
 
 <!-- iOS silent video trick -->
@@ -410,6 +419,28 @@ function updateFullscreenButton() {
   // If not supported (common on iOS Safari unless installed), hide the control.
   btn.style.display = supported ? "" : "none";
   btn.textContent = isFullscreenNow() ? "Exit Fullscreen" : "Enter Fullscreen";
+}
+
+function setControlsPlacement() {
+  const navActions = document.getElementById("navActions");
+  const sessionActions = document.getElementById("sessionActions");
+  const navMount = document.getElementById("navActionsMount");
+  const sessionMount = document.getElementById("sessionActionsMount");
+  const bottomMount = document.getElementById("controlsBottomMount");
+  const spacer = document.getElementById("controlsBottomSpacer");
+
+  if (!navActions || !sessionActions || !navMount || !sessionMount || !bottomMount || !spacer) return;
+
+  if (sessionActive) {
+    // Push controls down the page so you must scroll to re-press.
+    spacer.style.height = "70vh";
+    if (navActions.parentElement !== bottomMount) bottomMount.appendChild(navActions);
+    if (sessionActions.parentElement !== bottomMount) bottomMount.appendChild(sessionActions);
+  } else {
+    spacer.style.height = "0px";
+    if (navActions.parentElement !== navMount) navMount.appendChild(navActions);
+    if (sessionActions.parentElement !== sessionMount) sessionMount.appendChild(sessionActions);
+  }
 }
 
 // Navigation hardening (best-effort; browsers limit how "sticky" a page can be).
@@ -1275,6 +1306,7 @@ async function endSession({ reason = "Session ended" } = {}) {
 
   setStatus("Ending session…");
   sessionActive = false;
+  setControlsPlacement();
   keepAwakeEnabled = false;
   logEvent(reason);
 
@@ -1329,6 +1361,7 @@ document.getElementById("wakeButton").onclick = async () => {
   // Start session
   clearWarning();
   sessionActive = true;
+  setControlsPlacement();
   armNavigationGuard();
   keepAwakeEnabled = true;
   lastTimerTickMs = Date.now();
@@ -1444,6 +1477,7 @@ window.addEventListener("pageshow", () => {
 
 // Initialize button state
 updateWakeButtonState();
+setControlsPlacement();
 
 // PWA: service worker registration (GitHub Pages is HTTPS, so this should work)
 if ("serviceWorker" in navigator) {
