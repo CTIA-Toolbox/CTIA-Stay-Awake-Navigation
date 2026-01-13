@@ -39,6 +39,11 @@
     --warn-text: #9a3412;
     --info-bg: #eff6ff;
     --info-text: #1d4ed8;
+
+    /* Button sizing (tuned for mobile) */
+    --btn-font: 15px;
+    --btn-pad-y: 10px;
+    --btn-pad-x: 12px;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -163,13 +168,21 @@
     appearance: none;
     border: 1px solid transparent;
     border-radius: 12px;
-    padding: 12px 14px;
-    font-size: 16px;
+    padding: var(--btn-pad-y) var(--btn-pad-x);
+    font-size: var(--btn-font);
     font-weight: 700;
     letter-spacing: 0.01em;
     cursor: pointer;
     width: 100%;
     transition: transform 0.06s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  }
+
+  @media (max-width: 420px) {
+    :root {
+      --btn-font: 14px;
+      --btn-pad-y: 9px;
+      --btn-pad-x: 11px;
+    }
   }
 
   .btn:active { transform: translateY(1px); }
@@ -251,8 +264,8 @@
   }
 
   .subactions .btn {
-    font-size: 14px;
-    padding: 10px 12px;
+    font-size: 13px;
+    padding: 9px 10px;
   }
 
   @media (max-width: 520px) {
@@ -433,7 +446,7 @@ function setControlsPlacement() {
 
   if (sessionActive) {
     // Push controls down the page so you must scroll to re-press.
-    spacer.style.height = "70vh";
+    spacer.style.height = "120vh";
     if (navActions.parentElement !== bottomMount) bottomMount.appendChild(navActions);
     if (sessionActions.parentElement !== bottomMount) bottomMount.appendChild(sessionActions);
   } else {
@@ -1362,6 +1375,7 @@ document.getElementById("wakeButton").onclick = async () => {
   clearWarning();
   sessionActive = true;
   setControlsPlacement();
+  _hideResumeBanner();
   armNavigationGuard();
   keepAwakeEnabled = true;
   lastTimerTickMs = Date.now();
@@ -1375,6 +1389,8 @@ document.getElementById("wakeButton").onclick = async () => {
   startGpsLogging();
   setStatus("Session running");
   updateWakeButtonState();
+  // Keep the user at the top; controls are intentionally down-page.
+  try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* ignore */ }
 };
 
 document.getElementById("endButton").onclick = async () => {
