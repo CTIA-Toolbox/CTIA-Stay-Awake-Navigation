@@ -28,208 +28,119 @@
   <link rel="dns-prefetch" href="https://avatars.githubusercontent.com">
   <link rel="dns-prefetch" href="https://github-cloud.s3.amazonaws.com">
   <link rel="dns-prefetch" href="https://user-images.githubusercontent.com/">
-  <link rel="preconnect" href="https://github.githubassets.com" crossorigin>
-  <link rel="preconnect" href="https://avatars.githubusercontent.com">
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stay Awake App</title>
+    <meta name="description" content="A simple PWA to keep your device awake.">
+    <link rel="manifest" href="manifest.webmanifest">
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #181818;
+        color: #fff;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      .container {
+        background: #232323;
+        border-radius: 12px;
+        padding: 2rem 2.5rem;
+        box-shadow: 0 2px 16px #0008;
+        text-align: center;
+      }
+      h1 {
+        margin-bottom: 0.5em;
+      }
+      #wakelock-status {
+        margin-top: 1em;
+        font-size: 1.1em;
+        color: #0f0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Stay Awake</h1>
+      <p>This app keeps your device screen awake while active.</p>
+      <div id="wakelock-status">Initializing...</div>
+    </div>
+    <script>
+      let wakeLock = null;
+      let wakeLockActive = false;
+      let reacquireInterval = null;
+      const statusEl = document.getElementById('wakelock-status');
 
-  
+      async function requestWakeLock() {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLockActive = true;
+          statusEl.textContent = 'Wake Lock is active.';
+          wakeLock.addEventListener('release', () => {
+            wakeLockActive = false;
+            statusEl.textContent = 'Wake Lock was released. Reacquiring...';
+          });
+        } catch (err) {
+          wakeLockActive = false;
+          statusEl.textContent = 'Wake Lock error: ' + err.message;
+        }
+      }
 
+      if ('wakeLock' in navigator) {
+        requestWakeLock();
+        reacquireInterval = setInterval(() => {
+          if (!wakeLockActive) {
+            requestWakeLock();
+          }
+        }, 2000);
+      } else {
+        statusEl.textContent = 'Wake Lock API not supported.';
+      }
 
-  <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/light-dac525bbd821.css" /><link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/dark-784387e86ac0.css" /><link data-color-theme="light_high_contrast" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/light_high_contrast-56ccf4057897.css" /><link data-color-theme="light_colorblind" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/light_colorblind-0e24752a7d2b.css" /><link data-color-theme="light_colorblind_high_contrast" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/light_colorblind_high_contrast-412af2517363.css" /><link data-color-theme="light_tritanopia" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/light_tritanopia-6186e83663dc.css" /><link data-color-theme="light_tritanopia_high_contrast" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/light_tritanopia_high_contrast-9d33c7aea2e7.css" /><link data-color-theme="dark_high_contrast" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/dark_high_contrast-79bd5fd84a86.css" /><link data-color-theme="dark_colorblind" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/dark_colorblind-75db11311555.css" /><link data-color-theme="dark_colorblind_high_contrast" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/dark_colorblind_high_contrast-f2c1045899a2.css" /><link data-color-theme="dark_tritanopia" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/dark_tritanopia-f46d293c6ff3.css" /><link data-color-theme="dark_tritanopia_high_contrast" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/dark_tritanopia_high_contrast-e4b5684db29d.css" /><link data-color-theme="dark_dimmed" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/dark_dimmed-72c58078e707.css" /><link data-color-theme="dark_dimmed_high_contrast" crossorigin="anonymous" media="all" rel="stylesheet" data-href="https://github.githubassets.com/assets/dark_dimmed_high_contrast-956cb5dfcb85.css" />
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'hidden') {
+          if (wakeLock) {
+            try {
+              await wakeLock.release();
+              wakeLock = null;
+              wakeLockActive = false;
+              statusEl.textContent = 'Wake Lock released (tab hidden).';
+            } catch (err) {}
+          }
+        }
+      });
 
-  <style type="text/css">
-    :root {
-      --tab-size-preference: 4;
-    }
+      window.addEventListener('pagehide', async () => {
+        if (wakeLock) {
+          try {
+            await wakeLock.release();
+            wakeLock = null;
+            wakeLockActive = false;
+            statusEl.textContent = 'Wake Lock released (page hidden).';
+          } catch (err) {}
+        }
+      });
 
-    pre, code {
-      tab-size: var(--tab-size-preference);
-    }
-  </style>
-
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/primer-primitives-c37d781e2da5.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/primer-dc3bfaf4b78e.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/global-14019852d837.css" />
-    <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/github-6d0965b43add.css" />
-  <link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/repository-5d735668c600.css" />
-<link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/code-f0247a8b45d0.css" />
-
-  
-
-  <script type="application/json" id="client-env">{"locale":"en","featureFlags":["a11y_status_checks_ruleset","actions_custom_images_public_preview_visibility","actions_custom_images_storage_billing_ui_visibility","actions_enable_snapshot_keyword","actions_image_version_event","actions_workflow_language_service","agent_session_retry_fetch_capi_on_401","alternate_user_config_repo","api_insights_show_missing_data_banner","arianotify_comprehensive_migration","billing_hard_budget_limits_for_licenses","billing_ui_budget_pagination_enabled","codespaces_prebuild_region_target_update","coding_agent_model_selection","consolidated_custom_properties_values_table","contentful_lp_footnotes","copilot_3p_agent_hovercards","copilot_agent_cli_public_preview","copilot_agent_sessions_alive_updates","copilot_agent_task_list_v2","copilot_agent_tasks_btn_code_nav","copilot_agent_tasks_btn_code_view","copilot_agent_tasks_btn_code_view_lines","copilot_agent_tasks_btn_repo","copilot_agents_blankslate_mem_requests","copilot_api_agentic_issue_marshal_yaml","copilot_byok_extended_capabilities","copilot_chat_agents_empty_state","copilot_chat_attach_multiple_images","copilot_chat_clear_model_selection_for_default_change","copilot_chat_disable_model_picker_while_streaming","copilot_chat_file_redirect","copilot_chat_input_commands","copilot_chat_opening_thread_switch","copilot_chat_reduce_quota_checks","copilot_chat_search_bar_redirect","copilot_chat_selection_attachments","copilot_chat_vision_in_claude","copilot_chat_vision_preview_gate","copilot_coding_agent_task_response","copilot_custom_copilots","copilot_custom_copilots_feature_preview","copilot_duplicate_thread","copilot_extensions_hide_in_dotcom_chat","copilot_extensions_removal_on_marketplace","copilot_features_raycast_logo","copilot_file_block_ref_matching","copilot_ftp_hyperspace_upgrade_prompt","copilot_icebreakers_experiment_dashboard","copilot_icebreakers_experiment_hyperspace","copilot_immersive_generate_thread_name_async","copilot_immersive_job_result_preview","copilot_immersive_structured_model_picker","copilot_immersive_task_hyperlinking","copilot_immersive_task_within_chat_thread","copilot_issue_list_show_more","copilot_org_policy_page_focus_mode","copilot_pipes_code_nodes","copilot_pipes_github_graphql_nodes","copilot_premium_request_quotas","copilot_redirect_header_button_to_agents","copilot_security_alert_assignee_options","copilot_share_active_subthread","copilot_spaces_ga","copilot_spaces_individual_policies_ga","copilot_spaces_public_access_to_user_owned_spaces","copilot_spaces_use_search_endpoint","copilot_spark_empty_state","copilot_spark_handle_nil_friendly_name","copilot_stable_conversation_view","copilot_swe_agent_progress_commands","copilot_swe_agent_use_subagents","copilot_unconfigured_is_inherited","custom_properties_split_properties_editing_page","dashboard_indexeddb_caching","dashboard_lists_max_age_filter","dashboard_universe_2025","dashboard_universe_2025_feedback_dialog","dom_node_counts","enterprise_ai_controls","failbot_report_error_react_apps_on_page","fgpat_permissions_selector_redesign","flex_cta_groups_mvp","github_models_scheduled_hydro_events","global_nav_react","global_nav_react_edit_status_dialog","global_nav_react_feature_preview","global_nav_react_teams_settings_page","global_nav_react_top_repos_api_caching","global_nav_repo_picker_debounce","hide_groups_list_for_few_groups","hyperspace_2025_logged_out_batch_1","initial_per_page_pagination_updates","issue_fields_global_search","issue_fields_report_usage","issue_fields_timeline_events","issues_cache_operation_timeout","issues_cca_assign_actor_with_agent","issues_expanded_file_types","issues_lazy_load_comment_box_suggestions","issues_preheating_dependency_issues","issues_preheating_issue_row","issues_preheating_main","issues_preheating_memex","issues_preheating_parent_issue","issues_preheating_secondary","issues_preheating_sub_issues","issues_preheating_timeline_issues","issues_react_bots_timeline_pagination","issues_react_chrome_container_query_fix","issues_react_client_side_caching_analytics","issues_react_client_side_caching_cb","issues_react_custom_hpc_metric","issues_react_extended_preheat_analytics","issues_react_hot_cache","issues_react_include_bots_in_pickers","issues_react_prohibit_title_fallback","issues_react_safari_scroll_preservation","issues_react_timeline_query_pagination","issues_react_turbo_cache_navigation","issues_react_ui_feedback","issues_react_use_turbo_for_cross_repo_navigation","issues_report_sidebar_interactions","lifecycle_label_name_updates","loops_service_graphql_execution","marketing_pages_search_explore_provider","memex_default_issue_create_repository","memex_display_button_config_menu","memex_grouped_by_edit_route","memex_live_update_hovercard","memex_mwl_filter_field_delimiter","memex_roadmap_drag_style","mission_control_retry_on_401","mission_control_use_body_html","open_agent_session_in_vscode_insiders","open_agent_session_in_vscode_stable","pr_sfv_new_diff_fetch","primer_react_css_has_selector_perf","projects_assignee_max_limit","prs_conversations_react_split","pull_request_files_virtualization_containment","react_centralized_error_handling","react_profile_user_status_dialog_enabled","react_quality_profiling","repos_insights_remove_new_url","repository_suggester_elastic_search","request_position_for_pending_comments","ruleset_deletion_confirmation","sample_network_conn_type","site_calculator_actions_2025","site_features_copilot_universe","site_homepage_collaborate_video","site_homepage_contentful","spark_prompt_secret_scanning","spark_server_connection_status","swe_agent_member_requests","swe_agent_member_requests_agent_panel","viewscreen_sandbox","webp_support","workbench_store_readonly"],"login":"CTIA-Toolbox","copilotApiOverrideUrl":"https://api.individual.githubcopilot.com"}</script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/wp-runtime-43108e279996.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/78298-e2b301acbc0e.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/6488-de87864e6818.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/82075-ddabaa5df8f1.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/environment-2e8c0c3a6eab.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/97068-2c8e697c6e8c.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/43784-4652ae97a661.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/4712-6fc930a63a4b.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/81028-4fa90b716172.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/74911-498f12492577.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/91853-448038d8f9ef.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/78143-31968346cf4c.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/78954-eeadcb8a29db.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/github-elements-0fb6acf0f24b.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/element-registry-e51576172a3b.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/react-core-e58908b2bdcf.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/react-lib-b492ee0e2c35.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/90780-1a0f3d593ff0.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/28546-ee41c9313871.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/17688-a9e16fb5ed13.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/15938-1bc2c363d5ed.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/70191-36bdeb9f5eb6.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/7332-5ea4ccf72018.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/66721-c03c0d8e4fbe.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/51519-08058b4d6d41.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/27376-a7c75ed72fe1.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/96384-94f4e11ad43a.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/19718-302da6273821.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/behaviors-e88fe8afaa87.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/37911-8ca53539e04e.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/notifications-global-09b60cb040de.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/53996-671cb3f664b7.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/code-menu-e79e57599f8a.js" defer="defer"></script>
-  
-  <script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/primer-react-461f94d12ce0.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/octicons-react-a215e6ee021a.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/31475-2b0a1453a474.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/40746-9d8f02df7f67.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/40799-3861f5a0c503.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/99418-9d4961969e0d.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/33915-05ba9b3edc31.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/51220-1830aac4fd9d.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/46252-aa7aab8af154.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/90108-8609dee239df.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/51380-03f792003204.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/59672-23038d6e29fc.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/92742-539abba886e6.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/40771-7d5cf8e1d0b6.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/66990-9de206c4d4ba.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/29665-1d34baf5b8ee.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/91232-789a8efa6c89.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/67129-c3c21f7e6308.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/6623-0822648f6b5a.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/19976-f1a18aaa367b.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/10288-31a5a27a5d7e.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/35843-dfb9c8787894.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/3966-e6ee73f2062e.js" defer="defer"></script>
-<script crossorigin="anonymous" type="module" src="https://github.githubassets.com/assets/react-code-view-079d435709de.js" defer="defer"></script>
-<link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/primer-react.272733bb6899c5359cf5.module.css" />
-<link crossorigin="anonymous" media="all" rel="stylesheet" href="https://github.githubassets.com/assets/react-code-view.3c79b0f5262d5d642c72.module.css" />
-
-
-  <title>CTIA-Stay-Awake-Navigation/index.html at main · CTIA-Toolbox/CTIA-Stay-Awake-Navigation</title>
-
-
-
-  <meta name="route-pattern" content="/:user_id/:repository/blob/*name(/*path)" data-turbo-transient>
-  <meta name="route-controller" content="blob" data-turbo-transient>
-  <meta name="route-action" content="show" data-turbo-transient>
-  <meta name="fetch-nonce" content="v2:39abde59-58b6-eb80-1082-624c834f50a3">
-
-    
-  <meta name="current-catalog-service-hash" content="f3abb0cc802f3d7b95fc8762b94bdcb13bf39634c40c357301c4aa1d67a256fb">
-
-
-  <meta name="request-id" content="F7E1:348ACE:41649B:5C5ABF:697245BA" data-turbo-transient="true" /><meta name="html-safe-nonce" content="880331a5c3b7b98e2a9227ea27d1e17b52bccdd67631fbee6a22cb0a4efaccf0" data-turbo-transient="true" /><meta name="visitor-payload" content="eyJyZWZlcnJlciI6Imh0dHBzOi8vZ2l0aHViLmNvbS9DVElBLVRvb2xib3gvQ1RJQS1TdGF5LUF3YWtlLU5hdmlnYXRpb24iLCJyZXF1ZXN0X2lkIjoiRjdFMTozNDhBQ0U6NDE2NDlCOjVDNUFCRjo2OTcyNDVCQSIsInZpc2l0b3JfaWQiOiIyNzE0MTE4MDA2NDk3NzM4MzI4IiwicmVnaW9uX2VkZ2UiOiJpYWQiLCJyZWdpb25fcmVuZGVyIjoiaWFkIn0=" data-turbo-transient="true" /><meta name="visitor-hmac" content="11675d6a808f5e1604b7bc76aa20d520a21892ce326bd4a232aefb8ad2a4b9e8" data-turbo-transient="true" />
-
-
-    <meta name="hovercard-subject-tag" content="repository:1131258576" data-turbo-transient>
-
-
-  <meta name="github-keyboard-shortcuts" content="repository,source-code,file-tree,copilot" data-turbo-transient="true" />
-  
-
-  <meta name="selected-link" value="repo_source" data-turbo-transient>
-  <link rel="assets" href="https://github.githubassets.com/">
-
-    <meta name="google-site-verification" content="Apib7-x98H0j5cPqHWwSMm6dNU4GmODRoqxLiDzdx9I">
-
-<meta name="octolytics-url" content="https://collector.github.com/github/collect" /><meta name="octolytics-actor-id" content="195007531" /><meta name="octolytics-actor-login" content="CTIA-Toolbox" /><meta name="octolytics-actor-hash" content="5499b22579799028657beb0b9f293f7dd1281d41736a560af9ef9ccb9b1d2f42" />
-
-  <meta name="analytics-location" content="/&lt;user-name&gt;/&lt;repo-name&gt;/blob/show" data-turbo-transient="true" />
-
-  
-
-
-
-
-    <meta name="user-login" content="CTIA-Toolbox">
-
-  <link rel="sudo-modal" href="/sessions/sudo_modal">
-
-    <meta name="viewport" content="width=device-width">
-
-    
-
-      <meta name="description" content="Contribute to CTIA-Toolbox/CTIA-Stay-Awake-Navigation development by creating an account on GitHub.">
-
-      <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="GitHub">
-
-    <link rel="fluid-icon" href="https://github.com/fluidicon.png" title="GitHub">
-    <meta property="fb:app_id" content="1401488693436528">
-    <meta name="apple-itunes-app" content="app-id=1477376905, app-argument=https://github.com/CTIA-Toolbox/CTIA-Stay-Awake-Navigation/blob/main/index.html" />
-
-      <meta name="twitter:image" content="https://opengraph.githubassets.com/ceab6a973f4813018be3d6954a5261c44d72341eadf62c0ba2ed688576afd7b5/CTIA-Toolbox/CTIA-Stay-Awake-Navigation" /><meta name="twitter:site" content="@github" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content="CTIA-Stay-Awake-Navigation/index.html at main · CTIA-Toolbox/CTIA-Stay-Awake-Navigation" /><meta name="twitter:description" content="Contribute to CTIA-Toolbox/CTIA-Stay-Awake-Navigation development by creating an account on GitHub." />
-  <meta property="og:image" content="https://opengraph.githubassets.com/ceab6a973f4813018be3d6954a5261c44d72341eadf62c0ba2ed688576afd7b5/CTIA-Toolbox/CTIA-Stay-Awake-Navigation" /><meta property="og:image:alt" content="Contribute to CTIA-Toolbox/CTIA-Stay-Awake-Navigation development by creating an account on GitHub." /><meta property="og:image:width" content="1200" /><meta property="og:image:height" content="600" /><meta property="og:site_name" content="GitHub" /><meta property="og:type" content="object" /><meta property="og:title" content="CTIA-Stay-Awake-Navigation/index.html at main · CTIA-Toolbox/CTIA-Stay-Awake-Navigation" /><meta property="og:url" content="https://github.com/CTIA-Toolbox/CTIA-Stay-Awake-Navigation/blob/main/index.html" /><meta property="og:description" content="Contribute to CTIA-Toolbox/CTIA-Stay-Awake-Navigation development by creating an account on GitHub." />
-  
-
-
-      <link rel="shared-web-socket" href="wss://alive.github.com/_sockets/u/195007531/ws?session=eyJ2IjoiVjMiLCJ1IjoxOTUwMDc1MzEsInMiOjE5MTAwMTM2MDEsImMiOjI4OTU3Mzk4MywidCI6MTc2OTA5NjY0Nn0=--38b9597a377255d1905ac1f8711ba70763c730b194b7f38ac1482ae303deb551" data-refresh-url="/_alive" data-session-id="28a27e98b24c5835b7c67268d064325e392a9eb4253a9e22aaf98faef8c1b90d">
-      <link rel="shared-web-socket-src" href="/assets-cdn/worker/socket-worker-2a038060e454.js">
-
-
-      <meta name="hostname" content="github.com">
-
-
-      <meta name="keyboard-shortcuts-preference" content="all">
-      <meta name="hovercards-preference" content="true">
-      <meta name="announcement-preference-hovercard" content="true">
-
-        <meta name="expected-hostname" content="github.com">
-
-
-  <meta http-equiv="x-pjax-version" content="a5fec92533c7700e2782f554474ba79e4c3a59bac3440ec947fe96810e80f678" data-turbo-track="reload">
-  <meta http-equiv="x-pjax-csp-version" content="21a43568025709b66240454fc92d4f09335a96863f8ab1c46b4a07f6a5b67102" data-turbo-track="reload">
-  <meta http-equiv="x-pjax-css-version" content="11db81fa29d9c0cc06e1edce1a65a9d290233af282800834cf371831e6dfea11" data-turbo-track="reload">
-  <meta http-equiv="x-pjax-js-version" content="2c16db4e575031f6e3be03e0437c1ab663e0b4643ba5cbbfba48c1e4fc056a11" data-turbo-track="reload">
-
-  <meta name="turbo-cache-control" content="no-preview" data-turbo-transient="">
-
-      <meta name="turbo-cache-control" content="no-cache" data-turbo-transient>
-
-    <meta data-hydrostats="publish">
-
-  <meta name="go-import" content="github.com/CTIA-Toolbox/CTIA-Stay-Awake-Navigation git https://github.com/CTIA-Toolbox/CTIA-Stay-Awake-Navigation.git">
-
-  <meta name="octolytics-dimension-user_id" content="195007531" /><meta name="octolytics-dimension-user_login" content="CTIA-Toolbox" /><meta name="octolytics-dimension-repository_id" content="1131258576" /><meta name="octolytics-dimension-repository_nwo" content="CTIA-Toolbox/CTIA-Stay-Awake-Navigation" /><meta name="octolytics-dimension-repository_public" content="true" /><meta name="octolytics-dimension-repository_is_fork" content="false" /><meta name="octolytics-dimension-repository_network_root_id" content="1131258576" /><meta name="octolytics-dimension-repository_network_root_nwo" content="CTIA-Toolbox/CTIA-Stay-Awake-Navigation" />
-
-
-
-    
-
-    <meta name="turbo-body-classes" content="logged-in env-production page-responsive">
-  <meta name="disable-turbo" content="false">
-
-
-  <meta name="browser-stats-url" content="https://api.github.com/_private/browser/stats">
-
-  <meta name="browser-errors-url" content="https://api.github.com/_private/browser/errors">
-
-  <meta name="release" content="584fea6daacd0ba6f8dbec869937910ee0ae2e64">
-  <meta name="ui-target" content="full">
-
-  <link rel="mask-icon" href="https://github.githubassets.com/assets/pinned-octocat-093da3e6fa40.svg" color="#000000">
-  <link rel="alternate icon" class="js-site-favicon" type="image/png" href="https://github.githubassets.com/favicons/favicon.png">
-  <link rel="icon" class="js-site-favicon" type="image/svg+xml" href="https://github.githubassets.com/favicons/favicon.svg" data-base-href="https://github.githubassets.com/favicons/favicon">
-
-<meta name="theme-color" content="#1e2327">
-<meta name="color-scheme" content="light dark" />
-
-  <meta name="msapplication-TileImage" content="/windows-tile.png">
-  <meta name="msapplication-TileColor" content="#ffffff">
-
-  <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials">
+      window.addEventListener('freeze', async () => {
+        if (wakeLock) {
+          try {
+            await wakeLock.release();
+            wakeLock = null;
+            wakeLockActive = false;
+            statusEl.textContent = 'Wake Lock released (page suspended).';
+          } catch (err) {}
+        }
+      });
+    </script>
+  </body>
+  </html>
 
   </head>
 
