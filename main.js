@@ -19,6 +19,7 @@ async function requestWakeLock() {
     wakeLock.addEventListener("release", () => {
       console.log("Wake lock was released");
       wakeStatus.textContent = "Lost — Reacquiring…";
+      wakeLock = null;
     });
   } catch (err) {
     console.error("Wake lock error:", err);
@@ -26,12 +27,30 @@ async function requestWakeLock() {
   }
 }
 
-// Reacquire loop
-setInterval(() => {
+
+// Reacquire loop with reset on failure
+setInterval(async () => {
   if (!wakeLock) {
-    requestWakeLock();
+    try {
+      await requestWakeLock();
+    } catch (err) {
+      console.log("Reacquire failed:", err);
+      resetSession();
+    }
   }
 }, 2000);
+// Reset session state and UI
+function resetSession() {
+  startBtn.disabled = false;
+  startBtn.textContent = "Start Session";
+  document.body.classList.remove("session-running");
+
+  clearInterval(timerInterval);
+  timerInterval = null;
+
+  sessionTimer.textContent = "00:00:00";
+  wakeStatus.textContent = "Inactive";
+}
 
 // -----------------------------
 // Session Timer
@@ -75,7 +94,7 @@ function launchMaps() {
 startBtn.addEventListener("click", async () => {
   startBtn.disabled = true;
   startBtn.textContent = "Running…";
-
+  document.body.classList.add("session-running");
   await requestWakeLock();
   startTimer();
 });
