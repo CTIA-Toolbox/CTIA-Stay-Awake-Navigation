@@ -35,24 +35,9 @@
   <footer class="app-footer">
     <p>v1.0 • Circet Tools</p>
   </footer>
+  <div style="text-align:center; color:#ff7a00; font-size:0.9em; margin-bottom:8px;">Rev-2</div>
 
-  <script>
-function launchMaps() {
-  const androidIntent =
-    "intent://maps.google.com/#Intent;scheme=https;package=com.google.android.apps.maps;end";
-  const iosURL = "maps://";
-
-  const ua = navigator.userAgent.toLowerCase();
-
-  if (ua.includes("android")) {
-    window.open(androidIntent, "_blank");
-  } else if (ua.includes("iphone") || ua.includes("ipad")) {
-    window.open(iosURL, "_blank");
-  } else {
-    window.open("https://www.google.com/maps", "_blank");
-  }
-}
-  </script>
+  <script src="main.js"></script>
 </body>
 </html>
 
