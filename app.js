@@ -1199,15 +1199,6 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
   const stageCol = c.stage;
   const locationSourceCol = c.location_source;
 
-  const deriveStageLabel = (r) => {
-    const rawStage = stageCol ? toKey(r?.[stageCol]) : '';
-    const rawLocationSource = locationSourceCol ? toKey(r?.[locationSourceCol]) : '';
-    const ls = String(rawLocationSource || '').toLowerCase();
-
-    if (ls.includes('oem')) return 'OEM';
-    return rawStage || '';
-  };
-
   const makeNode = () => ({ count: 0, items: [], children: new Map() });
   const root = makeNode();
 
@@ -1223,7 +1214,7 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     // Preferred hierarchy for Google Earth toggles:
     // Stage -> Participant -> Location Technology (Location Source)
     const levels = [];
-    if (stageCol || locationSourceCol) levels.push(deriveStageLabel(r) || '(blank)');
+    if (stageCol) levels.push(toKey(r?.[stageCol]) || '(blank)');
     if (participantCol) levels.push(toKey(r?.[participantCol]) || '(blank)');
     if (locationSourceCol) levels.push(toKey(r?.[locationSourceCol]) || '(blank)');
 
@@ -1281,7 +1272,7 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     const styleUrl = isOk ? `#${STYLE_OK}` : `#${STYLE_BAD}`;
 
     const buildingVal = buildingCol ? toKey(r?.[buildingCol]) : '';
-    const stageVal = deriveStageLabel(r);
+    const stageVal = c.stage ? toKey(r?.[c.stage]) : '';
     const participantVal = c.participant ? toKey(r?.[c.participant]) : '';
     const pathVal = c.path_id ? toKey(r?.[c.path_id]) : '';
     const pointVal = c.point_id ? toKey(r?.[c.point_id]) : '';
@@ -1989,6 +1980,51 @@ function guessCallDimensionColumns(columns) {
       'loc alt hae',
     ]),
   };
+}
+
+function chooseBestCallStageColumn(columns, records, fallbackCol) {
+  const cols = Array.isArray(columns) ? columns : [];
+  const rows = Array.isArray(records) ? records : [];
+  const fallback = fallbackCol || null;
+  if (!cols.length || !rows.length) return fallback;
+
+  const stageCandidates = cols.filter((col) => {
+    const name = String(col ?? '').toLowerCase();
+    return name.includes('stage') || name.includes('stg') || name.includes('phase');
+  });
+
+  if (!stageCandidates.length) return fallback;
+
+  const sampleSize = Math.min(rows.length, 5000);
+  let bestCol = fallback;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const col of stageCandidates) {
+    const values = new Set();
+    let oemCount = 0;
+
+    for (let i = 0; i < sampleSize; i++) {
+      const v = toKey(rows[i]?.[col]);
+      if (!v) continue;
+      values.add(v);
+      if (v.toLowerCase() === 'oem') oemCount++;
+    }
+
+    if (!values.size) continue;
+
+    let score = 0;
+    if (oemCount > 0) score += 1000;
+    if (values.size >= 2) score += 20;
+    if (values.size >= 4) score += 20;
+    if (col === fallback) score += 5;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestCol = col;
+    }
+  }
+
+  return bestCol || fallback;
 }
 
 function toKey(v) {
@@ -3157,6 +3193,7 @@ async function onCallFileSelected(file) {
   const columns = records.length > 0 ? Object.keys(records[0]) : [];
   callState.columns = columns;
   callState.dimCols = guessCallDimensionColumns(columns);
+  callState.dimCols.stage = chooseBestCallStageColumn(columns, records, callState.dimCols.stage);
   callState.records = records;
   callState.filteredRecords = records;
   callState.lastFileInfo = {
@@ -3169,6 +3206,7 @@ async function onCallFileSelected(file) {
   logDebug(`[onCallFileSelected] XLSX loaded: ${records.length} rows, ${columns.length} columns.`);
   logDebug(`[onCallFileSelected] Raw columns: ${columns.join(', ')}`);
   logDebug(`[onCallFileSelected] Detected dimCols: ${JSON.stringify(callState.dimCols)}`);
+  logDebug(`[onCallFileSelected] Selected stage column: ${callState.dimCols.stage ?? '(none)'}`);
   logDebug(`Correlation data initialization complete.`);
   console.log(`[onCallFileSelected] XLSX loaded: ${records.length} rows, ${columns.length} columns.`);
   console.log(`[onCallFileSelected] Raw columns: ${columns.join(', ')}`);
