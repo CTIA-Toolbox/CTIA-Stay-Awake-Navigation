@@ -1371,8 +1371,19 @@ function buildCallKmlFromRows({ rows, docName, groupByParticipant = false }) {
     pieces.push('</Folder>');
   };
 
-  // Root-level placemarks (only when no grouping columns exist).
-  pieces.push(...root.items);
+
+  // If there are root-level placemarks and no grouping columns, wrap them in a Folder for Google Earth dropdown
+  const hasGrouping = stageCol || participantCol || locationSourceCol;
+  if (root.items.length && !hasGrouping) {
+    pieces.push('<Folder>');
+    pieces.push(`<name>${xmlEscape(docName || 'Call Vectors')}</name>`);
+    pieces.push('<open>1</open>');
+    pieces.push(...root.items);
+    pieces.push('</Folder>');
+  } else {
+    // Root-level placemarks (only when no grouping columns exist).
+    pieces.push(...root.items);
+  }
 
   const topNames = Array.from(root.children.keys()).sort((a, b) => a.localeCompare(b));
   for (const n of topNames) {
@@ -1438,60 +1449,36 @@ async function exportCallsToKml() {
     // ignore debug logging errors
   }
 
-  // Group records - split by test type only if building has explicit test type values
+  // Group records by building and test type, always create both 'All' and 'Retest' groups if present
   const buildingGroups = {};
-  const buildingsWithTestType = new Set();
-  
   if (buildingCol) {
-    // Pass 1: identify which buildings have explicit test type values
     for (const row of rows) {
       const building = String(row?.[buildingCol] ?? 'Building').trim() || 'Building';
-      if (testTypeCol) {
-        const rawVal = String(row?.[testTypeCol] ?? '').trim();
-        const testTypeVal = normalizeTestType(row?.[testTypeCol]);
-        if (testTypeVal) {
-          buildingsWithTestType.add(building);
-        }
-      }
-    }
-    
-    console.log('[KML DEBUG] Buildings with test type values:', Array.from(buildingsWithTestType));
-    console.log('[KML DEBUG] Test type column:', testTypeCol);
-    
-    // Pass 2: group by building + test type (if applicable)
-    for (const row of rows) {
-      const building = String(row?.[buildingCol] ?? 'Building').trim() || 'Building';
-      if (!buildingGroups[building]) buildingGroups[building] = {};
-      
+      if (!buildingGroups[building]) buildingGroups[building] = { All: [], Retest: [] };
       let testType = '';
-      if (buildingsWithTestType.has(building) && testTypeCol) {
+      if (testTypeCol) {
         testType = normalizeTestType(row?.[testTypeCol]) || '';
       }
-      const groupKey = testType || 'All';
-      
-      if (!buildingGroups[building][groupKey]) buildingGroups[building][groupKey] = [];
-      buildingGroups[building][groupKey].push(row);
+      if (testType === 'Retest') {
+        buildingGroups[building].Retest.push(row);
+      } else {
+        buildingGroups[building].All.push(row);
+      }
     }
-    
-    console.log('[KML DEBUG] Final grouping:', Object.entries(buildingGroups).reduce((acc, [b, groups]) => {
-      acc[b] = Object.entries(groups).reduce((g, [k, v]) => { g[k] = v.length; return g; }, {});
-      return acc;
-    }, {}));
   } else {
-    buildingGroups['Building'] = { 'All': rows };
+    buildingGroups['Building'] = { All: rows, Retest: [] };
   }
 
-  // Export a KML for each building + test type combination
+  // Always export both 'All' and 'Retest' KMLs if they have rows, and always use folder hierarchy
   const dt = new Date();
   const fileNames = [];
   for (const building of Object.keys(buildingGroups).sort()) {
     const typeGroups = buildingGroups[building];
-    for (const testType of Object.keys(typeGroups).sort()) {
+    for (const testType of ['All', 'Retest']) {
       const buildingRows = typeGroups[testType];
+      if (!buildingRows || !buildingRows.length) continue;
       const grouped = Boolean(participantCol || stageCol || locationSourceCol);
-      const testTypeLower = String(testType ?? '').toLowerCase();
-      const isRetestGroup = testTypeLower === 'retest';
-      const docLabel = isRetestGroup ? ' — Retest' : '';
+      const docLabel = testType === 'Retest' ? ' — Retest' : '';
       const kml = buildCallKmlFromRows({
         rows: buildingRows,
         docName: grouped
@@ -1500,7 +1487,7 @@ async function exportCallsToKml() {
         groupByParticipant: grouped,
       });
       if (!kml) continue;
-      const typeFilePart = isRetestGroup ? '_Retest' : '';
+      const typeFilePart = testType === 'Retest' ? '_Retest' : '';
       const filename = `Call_Vectors_${safeFilePart(building)}${typeFilePart}_${grouped ? 'By_Participant_' : ''}${formatDateForFilename(dt)}.kml`;
       downloadTextFile({ filename, text: kml, mime: 'application/vnd.google-earth.kml+xml;charset=utf-8' });
       fileNames.push(filename);
@@ -3422,6 +3409,26 @@ if (els.buildingText) {
   els.buildingText.addEventListener('change', () => applyBuildingTextFilter());
 }
 
+// Import Databases button (multi-file selector)
+const importDbBtn = document.querySelector('#importDatabasesBtn');
+if (!importDbBtn) {
+  // Create button dynamically if it doesn't exist in HTML
+  const newBtn = document.createElement('button');
+  newBtn.id = 'importDatabasesBtn';
+  newBtn.type = 'button';
+  newBtn.className = 'btn';
+  newBtn.textContent = 'Import Databases';
+  newBtn.style.marginBottom = '12px';
+  // Insert near top of page (after status)
+  const statusEl = document.querySelector('#statusText');
+  if (statusEl && statusEl.parentNode) {
+    statusEl.parentNode.insertBefore(newBtn, statusEl.nextSibling);
+  } else {
+    document.body.insertBefore(newBtn, document.body.firstChild);
+  }
+  logDebug('Created Import Databases button dynamically.');
+}
+
 // Header building selection events
 if (els.buildingSelect) {
   const applyBuildingSelectFilter = () => {
@@ -3522,7 +3529,72 @@ function attachFileInputListeners() {
 }
 
 // Try to attach immediately, and also on DOMContentLoaded in case elements were not ready
+// --- Multi-file database import handler ---
+function initImportDatabasesButton() {
+  const importBtn = document.querySelector('#importDatabasesBtn');
+  if (!importBtn) {
+    logDebug('Import databases button not found in DOM; creating dynamically.');
+    return;
+  }
+
+  // Create hidden multi-file input
+  const multiInput = document.createElement('input');
+  multiInput.type = 'file';
+  multiInput.multiple = true;
+  multiInput.accept = '.xlsx';
+  multiInput.style.display = 'none';
+  multiInput.id = 'importDatabasesInput';
+  document.body.appendChild(multiInput);
+
+  importBtn.addEventListener('click', () => {
+    logDebug('[Import] User clicked Import Databases button');
+    multiInput.value = '';
+    multiInput.click();
+  });
+
+  multiInput.addEventListener('change', async (ev) => {
+    const files = Array.from(ev.target.files || []);
+    if (!files.length) return;
+
+    setStatus(`Importing ${files.length} database file(s)…`);
+    logDebug(`[Import] Selected ${files.length} file(s)`);
+
+    let buildingLoaded = false;
+    let correlationLoaded = false;
+
+    for (const file of files) {
+      const nameLower = (file.name || '').toLowerCase();
+      logDebug(`[Import] Processing: ${file.name}`);
+
+      try {
+        if (nameLower.includes('building')) {
+          logDebug(`[Import] → Routing to Building Results loader`);
+          await onFileSelected(file);
+          buildingLoaded = true;
+        } else if (nameLower.includes('correlation')) {
+          logDebug(`[Import] → Routing to Correlation loader`);
+          await onCallFileSelected(file);
+          correlationLoaded = true;
+        } else {
+          logDebug(`[Import] ⚠ Unknown filename: ${file.name} (skipped)`);
+        }
+      } catch (err) {
+        console.error(`[Import] Error loading ${file.name}:`, err);
+        logDebug(`[Import] ✗ Error: ${err?.message ?? String(err)}`);
+      }
+    }
+
+    const summary = [];
+    if (buildingLoaded) summary.push('Building Results');
+    if (correlationLoaded) summary.push('Correlation');
+    const msg = summary.length ? `Imported: ${summary.join(' + ')}` : 'Import complete (no matching files).';
+    setStatus(msg);
+    logDebug(`[Import] Complete. ${msg}`);
+  });
+}
+
 console.log('REACHED 8: BEFORE_ATTACH_FILE_INPUT_LISTENERS_CALL');
+initImportDatabasesButton();
 attachFileInputListeners();
 window.addEventListener('DOMContentLoaded', () => attachFileInputListeners());
 
